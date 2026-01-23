@@ -9,14 +9,14 @@ import csv
 class ExcelReader:
     """Excel文件读取器"""
     
-    def __init__(self, file_path: str, frozen_zone: str = "A:F", data_zone: str = "G:Z"):
+    def __init__(self, file_path: str, frozen_zone: str = "0:5", data_zone: str = "6:25"):
         """
         初始化Excel读取器
         
         Args:
             file_path: Excel文件路径
-            frozen_zone: 冻结区域（如"A:F"表示A到F列）
-            data_zone: 数据区域（如"G:Z"表示G到Z列）
+            frozen_zone: 冻结区域列范围，数字索引，格式: start:end (如"0:5"表示第0到5列，对应A-F)
+            data_zone: 数据区域列范围，数字索引，格式: start:end (如"6:25"表示第6到25列，对应G-Z)
         """
         self.file_path = Path(file_path)
         self.frozen_zone = frozen_zone
@@ -26,11 +26,18 @@ class ExcelReader:
         self._data_cols = self._parse_zone(data_zone)
     
     def _parse_zone(self, zone: str) -> Tuple[int, int]:
-        """解析区域字符串，如 'A:F' -> (0, 5)"""
+        """解析区域字符串，数字索引格式
+        支持格式:
+        - "start:end" -> (start, end) 如 "0:5"
+        - "single" -> (single, single) 如 "5184" 表示只有一列
+        """
         if ":" in zone:
             start, end = zone.split(":")
-            return (self._col_to_index(start), self._col_to_index(end))
-        return (0, 0)
+            return (int(start), int(end))
+        else:
+            # 单个数字，表示只有一列
+            single = int(zone)
+            return (single, single)
     
     def _col_to_index(self, col: str) -> int:
         """将列字母转换为索引（0-based）"""
@@ -196,14 +203,33 @@ class CSVReader:
             return data
 
 
-def get_reader(file_path: str, frozen_zone: str = "A:F", data_zone: str = "G:Z"):
-    """获取合适的文件读取器"""
+def _parse_zone_tuple(zone: str) -> Tuple[int, int]:
+    """解析区域字符串为元组
+    支持格式:
+    - "start:end" -> (start, end) 如 "0:5"
+    - "single" -> (single, single) 如 "5184" 表示只有一列
+    """
+    if ":" in zone:
+        start, end = zone.split(":")
+        return (int(start), int(end))
+    else:
+        single = int(zone)
+        return (single, single)
+
+
+def get_reader(file_path: str, frozen_zone: str = "0:5", data_zone: str = "6:25"):
+    """获取合适的文件读取器
+    
+    Args:
+        file_path: 文件路径
+        frozen_zone: 冻结区域列范围，数字索引格式 (如 "0:5")
+        data_zone: 数据区域列范围，数字索引格式 (如 "6:25" 或 "5184" 表示单列)
+    """
     path = Path(file_path)
     if path.suffix.lower() == '.csv':
-        frozen_cols = (ord(frozen_zone.split(":")[0].upper()) - ord('A'),
-                      ord(frozen_zone.split(":")[1].upper()) - ord('A'))
-        data_cols = (ord(data_zone.split(":")[0].upper()) - ord('A'),
-                    ord(data_zone.split(":")[1].upper()) - ord('A'))
+        # 解析数字索引格式
+        frozen_cols = _parse_zone_tuple(frozen_zone)
+        data_cols = _parse_zone_tuple(data_zone)
         return CSVReader(file_path, frozen_cols, data_cols)
     else:
         return ExcelReader(file_path, frozen_zone, data_zone)

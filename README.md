@@ -116,6 +116,32 @@ tap/
 - `delete_record()`: 删除记录
 - `delete_records()`: 批量删除记录
 
+实际例子
+```bash
+tap flush "Tap/.trash/1-JTCBB_CBB04矿山企业产品综合成本构成表_merged.csv" --frozen-zone "1:4" --data-zone "5:184" --table-id tbl3aVf0vW7hMZfi --mode field
+tap flush "Tap/.trash/1-JTCBB_CBB04矿山企业产品综合成本构成表_merged.csv" --frozen-zone "1:4" --data-zone "186:456" --table-id tblzO8gbUedihy45 --mode field
+tap flush "Tap/.trash/2-JTCBB_CBB02矿山作业成本项目构成表_merged.csv" --frozen-zone "1:4" --data-zone "5:Z" --table-id tble0lofFXXNBv8d --mode field
+tap flush "Tap/.trash/2-JTCBB_CBB02矿山作业成本项目构成表_merged.csv" --frozen-zone "1:4" --data-zone "G:Z" --table-id tblKjkqskINE6Byp --mode field
+tap flush "Tap/.trash/2-JTCBB_CBB02矿山作业成本项目构成表_merged.csv" --frozen-zone "1:4" --data-zone "G:Z" --table-id tblUhWnY49ubqMYg --mode field
+tap flush "Tap/.trash/2-JTCBB_CBB02矿山作业成本项目构成表_merged.csv" --frozen-zone "1:4" --data-zone "G:Z" --table-id tblxUjM9HNsX94Cg --mode field
+tap flush "Tap/.trash/2-JTCBB_CBB02矿山作业成本项目构成表_merged.csv" --frozen-zone "1:4" --data-zone "G:Z" --table-id tblCNvFgxa12SKWM --mode field
+tap flush "Tap/.trash/2-JTCBB_CBB02矿山作业成本项目构成表_merged.csv" --frozen-zone "1:4" --data-zone "G:Z" --table-id tblZEX7HaZCtiuvd --mode field
+tap flush "Tap/.trash/2-JTCBB_CBB02矿山作业成本项目构成表_merged.csv" --frozen-zone "1:4" --data-zone "G:Z" --table-id tbl4PEjGgITNRmB9 --mode field
+tap flush "Tap/.trash/3-JTCBB_CBB03矿山成本要素表_merged.csv" --frozen-zone "1:4" --data-zone "5:Z" --table-id tbl9rMAai8vmd2M0 --mode field
+tap flush "Tap/.trash/3-JTCBB_CBB03矿山成本要素表_merged.csv" --frozen-zone "1:4" --data-zone "G:Z" --table-id tblUnCVXrJnZLt0A --mode field
+tap flush "Tap/.trash/3-JTCBB_CBB03矿山成本要素表_merged.csv" --frozen-zone "1:4" --data-zone "G:Z" --table-id tblJPzGYdjCGIGMM --mode field
+tap flush "Tap/.trash/4-JTCBB_CBB05矿山企业制造费用明细表_merged.csv" --frozen-zone "1:4" --data-zone "5:Z" --table-id tblA2DvdA5e9bTdS --mode field
+tap flush "Tap/.trash/4-JTCBB_CBB05矿山企业制造费用明细表_merged.csv" --frozen-zone "1:4" --data-zone "G:Z" --table-id tblA4hCXmqf0Zcu0 --mode field
+tap flush "Tap/.trash/4-JTCBB_CBB05矿山企业制造费用明细表_merged.csv" --frozen-zone "1:4" --data-zone "G:Z" --table-id tbl6xtJP63orQPSF --mode field
+tap flush "Tap/.trash/4-JTCBB_CBB05矿山企业制造费用明细表_merged.csv" --frozen-zone "1:4" --data-zone "G:Z" --table-id tblmzGZLnPAl6kzX --mode field
+tap flush "Tap/.trash/5-JTCBB_CBB07定额材料、动力消耗统计表_merged.csv" --frozen-zone "1:4" --data-zone "5:Z" --table-id tblqacZcc0ehXI2C --mode field
+tap flush "Tap/.trash/5-JTCBB_CBB07定额材料、动力消耗统计表_merged.csv" --frozen-zone "1:4" --data-zone "G:Z" --table-id tbl32l0sTJoTYg9Y --mode field
+tap flush "Tap/.trash/5-JTCBB_CBB07定额材料、动力消耗统计表_merged.csv" --frozen-zone "1:4" --data-zone "G:Z" --table-id tblGE1A2E6ZvsH6W --mode field
+tap flush "Tap/.trash/5-JTCBB_CBB07定额材料、动力消耗统计表_merged.csv" --frozen-zone "1:4" --data-zone "G:Z" --table-id tblMG0xm33aVMMaF --mode field
+tap flush "Tap/.trash/5-JTCBB_CBB07定额材料、动力消耗统计表_merged.csv" --frozen-zone "1:4" --data-zone "G:Z" --table-id tblASzmARuavuWSO --mode field
+tap flush "Tap/.trash/5-JTCBB_CBB07定额材料、动力消耗统计表_merged.csv" --frozen-zone "1:4" --data-zone "G:Z" --table-id tbl9KhZ7VlSe5rGG --mode field
+```
+
 ## License
 
 MIT

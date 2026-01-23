@@ -71,8 +71,8 @@ def add_check_subparser(subparsers):
     """添加check子命令"""
     check_parser = subparsers.add_parser('check', help='校验文件字段与数据表字段是否匹配')
     check_parser.add_argument('file_path', help='Excel/CSV文件路径')
-    check_parser.add_argument('--frozen-zone', default='A:F', help='冻结区域列范围 (默认: A:F)')
-    check_parser.add_argument('--data-zone', default='G:Z', help='数据区域列范围 (默认: G:Z)')
+    check_parser.add_argument('--frozen-zone', default='0:5', help='冻结区域列范围，数字索引，格式: start:end 或单个数字 (默认: 0:5，对应A-F列)')
+    check_parser.add_argument('--data-zone', default='6:25', help='数据区域列范围，数字索引，格式: start:end 或单个数字 (默认: 6:25，对应G-Z列)')
     check_parser.add_argument('--table-id', required=True, help='数据表ID')
 
 
@@ -92,8 +92,8 @@ def add_flush_subparser(subparsers):
     """添加flush子命令"""
     flush_parser = subparsers.add_parser('flush', help='同步数据到飞书多维表格')
     flush_parser.add_argument('file_path', help='Excel/CSV文件路径')
-    flush_parser.add_argument('--frozen-zone', default='A:F', help='冻结区域列范围 (默认: A:F)')
-    flush_parser.add_argument('--data-zone', default='G:Z', help='数据区域列范围 (默认: G:Z)')
+    flush_parser.add_argument('--frozen-zone', default='0:5', help='冻结区域列范围，数字索引，格式: start:end 或单个数字 (默认: 0:5，对应A-F列)')
+    flush_parser.add_argument('--data-zone', default='6:25', help='数据区域列范围，数字索引，格式: start:end 或单个数字 (默认: 6:25，对应G-Z列)')
     flush_parser.add_argument('--table-id', required=True, help='数据表ID')
     flush_parser.add_argument('--mode', default='record', choices=['field', 'record'], 
                               help='同步模式 (默认: record)')

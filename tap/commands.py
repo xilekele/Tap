@@ -186,8 +186,7 @@ class FlushCommand:
                         single_link_fields[field_name] = field_property
                     else:
                         special_field_names.add(field_name)
-                elif field_type == 18:  # 日期时间
-                    special_field_names.add(field_name)
+                # type=18（日期时间）不再默认跳过，飞书API可能返回不准确的类型
             
             # 构建数据ID到记录的映射
             # 数据ID存储在某个字段中，假设字段名为"数据ID"
@@ -273,15 +272,26 @@ class FlushCommand:
                     # 处理单项关联字段 - 先记录下来，后面再更新
                     link_field_values = {}
                     for field_name, link_info in single_link_fields.items():
-                        if field_name in merged_fields:
+                        # CSV中的字段名：优先使用映射，否则使用飞书字段名
+                        csv_field_name = field_name_mapping.get(field_name, field_name)
+                        # 从merged_fields中获取显示值
+                        if csv_field_name in merged_fields:
+                            link_value = str(merged_fields[csv_field_name])
+                        elif field_name in merged_fields:
+                            # 如果映射后的名称不存在，尝试使用原始字段名
                             link_value = str(merged_fields[field_name])
-                            link_table_id = link_info.get("table_id")
-                            
-                            if link_table_id and link_value and link_table_id in link_cache:
-                                record_id = link_cache[link_table_id].get(link_value)
-                                if record_id:
-                                    link_field_values[field_name] = record_id
-    
+                        else:
+                            continue
+                        
+                        link_table_id = link_info.get("table_id")
+                        if link_table_id and link_value and link_table_id in link_cache:
+                            record_id = link_cache[link_table_id].get(link_value)
+                            if record_id:
+                                link_field_values[field_name] = [record_id]
+                                # 尝试用 record_id 更新关联字段
+                                print(f"  🔗 关联 '{csv_field_name}' -> {link_value} (record_id: {record_id})")
+                            else:
+                                print(f"  ⚠️  未找到 '{link_value}' 对应的关联记录")
                     if data_id in record_map:
                         # 记录已存在
                         existing_record = record_map[data_id]
@@ -331,18 +341,21 @@ class FlushCommand:
                         else:
                             stats["unchanged"] += 1
                     else:
-                        # 新建记录（不含关联字段）
+                        # 新建记录（不含关联字段，但先尝试直接创建）
                         create_fields = {k: v for k, v in filtered_fields.items() if k not in single_link_fields}
-                        new_record = self.client.create_record(
-                            self.config.app_token,
-                            self.table_id,
-                            create_fields
-                        )
-                        stats["created"] += 1
-                        print(f"➕ 新建记录: {data_id}")
                         
-                        # 尝试更新关联字段（可能报错）
-                        if new_record and link_field_values:
+                        # 如果有关联字段值，先创建记录再更新关联字段
+                        if link_field_values:
+                            # 先尝试不带关联字段创建
+                            new_record = self.client.create_record(
+                                self.config.app_token,
+                                self.table_id,
+                                create_fields
+                            )
+                            stats["created"] += 1
+                            print(f"➕ 新建记录: {data_id}")
+                            
+                            # 然后更新关联字段
                             for field_name, link_id in link_field_values.items():
                                 try:
                                     self.client.update_record(
@@ -354,6 +367,15 @@ class FlushCommand:
                                     print(f"  🔗 关联 '{field_name}' -> {link_id}")
                                 except Exception as e:
                                     print(f"  ⚠️  更新关联 '{field_name}' 失败: {e}")
+                        else:
+                            # 无关联字段，直接创建
+                            new_record = self.client.create_record(
+                                self.config.app_token,
+                                self.table_id,
+                                create_fields
+                            )
+                            stats["created"] += 1
+                            print(f"➕ 新建无关联字段记录: {data_id}")
                         
                 except Exception as e:
                     stats["errors"] += 1

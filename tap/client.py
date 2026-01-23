@@ -246,7 +246,6 @@ class FeishuClient:
                       fields: Dict[str, Any]) -> Dict[str, Any]:
         """更新记录"""
         payload = {"fields": fields}
-
         return self._request("PUT", f"/bitable/v1/apps/{app_token}/tables/{table_id}/records/{record_id}", json=payload)
     
     def update_records(self, app_token: str, table_id: str, records: List[Dict]) -> Dict[str, Any]:
