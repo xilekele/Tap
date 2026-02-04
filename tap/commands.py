@@ -272,8 +272,8 @@ class FlushCommand:
                     # 处理单项关联字段 - 先记录下来，后面再更新
                     link_field_values = {}
                     for field_name, link_info in single_link_fields.items():
-                        # CSV中的字段名：优先使用映射，否则使用飞书字段名
-                        csv_field_name = field_name_mapping.get(field_name, field_name)
+                        # CSV中的字段名：与飞书字段同名
+                        csv_field_name = field_name
                         # 从merged_fields中获取显示值
                         if csv_field_name in merged_fields:
                             link_value = str(merged_fields[csv_field_name])
@@ -362,7 +362,7 @@ class FlushCommand:
                                         self.config.app_token,
                                         self.table_id,
                                         new_record.get("record_id"),
-                                        {field_name: [link_id]}
+                                        {field_name: link_id}
                                     )
                                     print(f"  🔗 关联 '{field_name}' -> {link_id}")
                                 except Exception as e:
