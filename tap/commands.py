@@ -1,10 +1,14 @@
 """命令模块"""
 
+import time
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Any
 from .config import get_config
 from .client import get_client
 from .reader import get_reader
+
+# 请求间隔配置（秒）
+REQUEST_INTERVAL = 0.2  # 每次请求间隔0.2秒
 
 
 class CheckCommand:
@@ -159,6 +163,7 @@ class FlushCommand:
             
             # 获取飞书表格现有记录
             existing_records = self.client.get_records(self.config.app_token, self.table_id)
+            time.sleep(REQUEST_INTERVAL)  # 请求间隔
             
             # 收集特殊类型字段信息
             # type=18: 日期时间, type=21: 关联, type=3: 单选, type=5: 多选等
@@ -323,6 +328,7 @@ class FlushCommand:
                                 existing_record.get("record_id"),
                                 update_fields
                             )
+                            time.sleep(REQUEST_INTERVAL)  # 请求间隔
                             stats["updated"] += 1
                             print(f"🔄 更新记录: {data_id}")
                             
@@ -335,6 +341,7 @@ class FlushCommand:
                                         existing_record.get("record_id"),
                                         {field_name: link_id}
                                     )
+                                    time.sleep(REQUEST_INTERVAL)  # 请求间隔
                                     print(f"  🔗 关联 '{field_name}' -> {link_id}")
                                 except Exception as e:
                                     print(f"  ⚠️  更新关联 '{field_name}' 失败: {e}")
@@ -352,6 +359,7 @@ class FlushCommand:
                                 self.table_id,
                                 create_fields
                             )
+                            time.sleep(REQUEST_INTERVAL)  # 请求间隔
                             stats["created"] += 1
                             print(f"➕ 新建记录: {data_id}")
                             
@@ -364,6 +372,7 @@ class FlushCommand:
                                         new_record.get("record_id"),
                                         {field_name: link_id}
                                     )
+                                    time.sleep(REQUEST_INTERVAL)  # 请求间隔
                                     print(f"  🔗 关联 '{field_name}' -> {link_id}")
                                 except Exception as e:
                                     print(f"  ⚠️  更新关联 '{field_name}' 失败: {e}")
@@ -374,6 +383,7 @@ class FlushCommand:
                                 self.table_id,
                                 create_fields
                             )
+                            time.sleep(REQUEST_INTERVAL)  # 请求间隔
                             stats["created"] += 1
                             print(f"➕ 新建无关联字段记录: {data_id}")
                         

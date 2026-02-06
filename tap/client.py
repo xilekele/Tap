@@ -8,6 +8,12 @@ from .config import get_config
 # API基础地址
 FEISHU_API_BASE = "https://open.feishu.cn/open-apis"
 
+# 重试配置
+MAX_RETRIES = 5  # 最大重试次数
+INITIAL_BACKOFF = 1  # 初始退避时间（秒）
+MAX_BACKOFF = 60  # 最大退避时间（秒）
+BACKOFF_MULTIPLIER = 2  # 退避倍数
+
 class FeishuClient:
     """飞书API客户端"""
     
@@ -47,28 +53,71 @@ class FeishuClient:
         return self.config.tenant_access_token
     
     def _request(self, method: str, endpoint: str, **kwargs) -> Dict[str, Any]:
-        """发送API请求"""
+        """发送API请求（带重试和指数退避）"""
         token = self._get_tenant_access_token()
         url = f"{FEISHU_API_BASE}{endpoint}"
         
         headers = kwargs.pop("headers", {})
         headers["Authorization"] = f"Bearer {token}"
         
-        try:
-            response = self.session.request(method, url, headers=headers, **kwargs)
-            response.raise_for_status()
-            data = response.json()
-        except requests.exceptions.HTTPError as e:
-            if response.status_code == 404:
-                raise Exception(f"API路径不存在: {endpoint}\n可能原因: 1)应用缺少多维表格权限 2)应用未在企业内安装 3)app_token不正确")
-            raise Exception(f"HTTP错误: {e}")
-        except Exception as e:
-            raise Exception(f"请求错误: {e}")
+        backoff = INITIAL_BACKOFF
         
-        if data.get("code") != 0:
-            raise Exception(f"API请求失败: {data.get('msg')}")
+        for attempt in range(MAX_RETRIES):
+            try:
+                response = self.session.request(method, url, headers=headers, **kwargs)
+                
+                # 处理429错误（请求频率过高）
+                if response.status_code == 429:
+                    wait_time = min(backoff, MAX_BACKOFF)
+                    print(f"⚠️  请求频率过高 (429)，等待 {wait_time} 秒后重试 ({attempt + 1}/{MAX_RETRIES})...")
+                    time.sleep(wait_time)
+                    backoff *= BACKOFF_MULTIPLIER
+                    continue
+                
+                response.raise_for_status()
+                data = response.json()
+                
+            except requests.exceptions.HTTPError as e:
+                if response.status_code == 404:
+                    raise Exception(f"API路径不存在: {endpoint}\n可能原因: 1)应用缺少多维表格权限 2)应用未在企业内安装 3)app_token不正确")
+                # 其他HTTP错误也尝试重试
+                if response.status_code in (429, 500, 502, 503, 504) and attempt < MAX_RETRIES - 1:
+                    wait_time = min(backoff, MAX_BACKOFF)
+                    print(f"⚠️  服务器错误 ({response.status_code})，等待 {wait_time} 秒后重试 ({attempt + 1}/{MAX_RETRIES})...")
+                    time.sleep(wait_time)
+                    backoff *= BACKOFF_MULTIPLIER
+                    continue
+                print(dir(e.response), e.response.text)
+                raise Exception(f"HTTP错误: {e}")
+            except Exception as e:
+                if attempt < MAX_RETRIES - 1:
+                    wait_time = min(backoff, MAX_BACKOFF)
+                    print(f"⚠️  请求错误: {e}，等待 {wait_time} 秒后重试 ({attempt + 1}/{MAX_RETRIES})...")
+                    time.sleep(wait_time)
+                    backoff *= BACKOFF_MULTIPLIER
+                    continue
+                raise Exception(f"请求错误: {e}")
+            
+            # 成功获取响应，检查API返回码
+            if data.get("code") != 0:
+                error_msg = data.get("msg", "")
+                error_code = data.get("code", "")
+                
+                # 某些错误码可以重试
+                retry_codes = [9, 9999]  # 内部错误等
+                if error_code in retry_codes and attempt < MAX_RETRIES - 1:
+                    wait_time = min(backoff, MAX_BACKOFF)
+                    print(f"⚠️  API错误码 {error_code} ({error_msg})，等待 {wait_time} 秒后重试 ({attempt + 1}/{MAX_RETRIES})...")
+                    time.sleep(wait_time)
+                    backoff *= BACKOFF_MULTIPLIER
+                    continue
+                
+                raise Exception(f"API请求失败: [{error_code}] {error_msg}")
+            
+            return data.get("data", {})
         
-        return data.get("data", {})
+        # 超过最大重试次数
+        raise Exception(f"请求失败，已达到最大重试次数 ({MAX_RETRIES})")
     
     # ==================== 应用级API ====================
     
