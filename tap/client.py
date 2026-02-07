@@ -87,7 +87,6 @@ class FeishuClient:
                     time.sleep(wait_time)
                     backoff *= BACKOFF_MULTIPLIER
                     continue
-                print(dir(e.response), e.response.text)
                 raise Exception(f"HTTP错误: {e}")
             except Exception as e:
                 if attempt < MAX_RETRIES - 1:
@@ -204,9 +203,23 @@ class FeishuClient:
         """获取字段详情"""
         return self._request("GET", f"/bitable/v1/apps/{app_token}/tables/{table_id}/fields/{field_id}")
     
+    def create_fields(self, app_token: str, table_id: str, fields: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """批量创建字段
+        
+        Args:
+            app_token: 应用token
+            table_id: 数据表ID
+            fields: 字段列表，每个字段包含 field_name, type, property(可选)
+        
+        Returns:
+            API响应结果
+        """
+        payload = {"fields": fields}
+        return self._request("POST", f"/bitable/v1/apps/{app_token}/tables/{table_id}/fields/batch_create", json=payload)
+    
     def create_field(self, app_token: str, table_id: str, field_name: str, field_type: str, 
                      options: Optional[Dict] = None) -> Dict[str, Any]:
-        """创建字段"""
+        """创建单个字段（兼容旧接口）"""
         payload = {
             "field_name": field_name,
             "type": int(field_type),

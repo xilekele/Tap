@@ -142,20 +142,26 @@ class FlushCommand:
                     if field.get("type") == 21:  # 关联类型
                         link_fields.add(field.get("field_name"))
                 
-                # 创建缺失的字段（跳过关联字段）
+                # 收集所有缺失的字段，批量创建
+                missing_fields = []
                 for header in data_headers:
                     if header and header not in bitable_field_map and header not in link_fields:
-                        print(f"⚠️  发现新字段 '{header}'，创建中...")
-                        # 默认创建文本字段
-                        self.client.create_field(
-                            self.config.app_token, 
-                            self.table_id, 
-                            header, 
-                            "1"  # 文本类型
-                        )
-                        print(f"✅ 字段 '{header}' 创建成功")
+                        missing_fields.append({
+                            "field_name": header,
+                            "type": 1  # 文本类型
+                        })
                     elif header and header in link_fields:
                         print(f"⚠️  字段 '{header}' 是关联字段，需要手动配置")
+                
+                # 批量创建缺失的字段
+                if missing_fields:
+                    print(f"⚠️  发现 {len(missing_fields)} 个新字段，批量创建中...")
+                    self.client.create_fields(
+                        self.config.app_token, 
+                        self.table_id, 
+                        missing_fields
+                    )
+                    print(f"✅ 成功创建 {len(missing_fields)} 个字段")
                 
                 # 刷新字段列表
                 bitable_fields = self.client.get_fields(self.config.app_token, self.table_id)
@@ -248,7 +254,13 @@ class FlushCommand:
                 "errors": 0
             }
             
-            # 处理每行数据
+            # 收集需要批量处理的数据
+            to_create = []  # 需要新建的记录 [{fields: {...}}, ...]
+            to_update = []  # 需要更新的记录 [{record_id: ..., fields: {...}}, ...]
+            to_create_ids = []  # 新建记录的数据ID，用于后续关联字段更新
+            to_update_ids = []  # 更新记录的数据ID，用于后续关联字段更新
+            
+            # 第一遍：收集所有需要创建和更新的记录（不含关联字段）
             for i, (frozen_data, data_row) in enumerate(zip(frozen_data_list, data_rows)):
                 try:
                     data_id = self._generate_data_id(frozen_data)
@@ -274,16 +286,13 @@ class FlushCommand:
                                 except (ValueError, TypeError):
                                     pass  # 转换失败保持原值
                     
-                    # 处理单项关联字段 - 先记录下来，后面再更新
+                    # 处理单项关联字段 - 先记录下来
                     link_field_values = {}
                     for field_name, link_info in single_link_fields.items():
-                        # CSV中的字段名：与飞书字段同名
                         csv_field_name = field_name
-                        # 从merged_fields中获取显示值
                         if csv_field_name in merged_fields:
                             link_value = str(merged_fields[csv_field_name])
                         elif field_name in merged_fields:
-                            # 如果映射后的名称不存在，尝试使用原始字段名
                             link_value = str(merged_fields[field_name])
                         else:
                             continue
@@ -293,16 +302,15 @@ class FlushCommand:
                             record_id = link_cache[link_table_id].get(link_value)
                             if record_id:
                                 link_field_values[field_name] = [record_id]
-                                # 尝试用 record_id 更新关联字段
-                                print(f"  🔗 关联 '{csv_field_name}' -> {link_value} (record_id: {record_id})")
-                            else:
-                                print(f"  ⚠️  未找到 '{link_value}' 对应的关联记录")
+                    
+                    # 过滤掉关联字段（不含在第一批创建/更新中）
+                    create_fields = {k: v for k, v in filtered_fields.items() if k not in single_link_fields}
+                    
                     if data_id in record_map:
-                        # 记录已存在
+                        # 记录已存在，检查是否需要更新
                         existing_record = record_map[data_id]
                         existing_fields = existing_record.get("fields", {})
                         
-                        # 简单比较（实际可能需要更复杂的比较逻辑）
                         def value_to_str(v):
                             """安全转换为字符串"""
                             if v is None:
@@ -320,76 +328,150 @@ class FlushCommand:
                                     break
                         
                         if needs_update:
-                            # 先更新非关联字段
-                            update_fields = {k: v for k, v in filtered_fields.items() if k not in single_link_fields}
-                            self.client.update_record(
-                                self.config.app_token,
-                                self.table_id,
-                                existing_record.get("record_id"),
-                                update_fields
-                            )
-                            time.sleep(REQUEST_INTERVAL)  # 请求间隔
-                            stats["updated"] += 1
-                            print(f"🔄 更新记录: {data_id}")
-                            
-                            # 尝试更新关联字段（可能报错）
-                            for field_name, link_id in link_field_values.items():
-                                try:
-                                    self.client.update_record(
-                                        self.config.app_token,
-                                        self.table_id,
-                                        existing_record.get("record_id"),
-                                        {field_name: link_id}
-                                    )
-                                    time.sleep(REQUEST_INTERVAL)  # 请求间隔
-                                    print(f"  🔗 关联 '{field_name}' -> {link_id}")
-                                except Exception as e:
-                                    print(f"  ⚠️  更新关联 '{field_name}' 失败: {e}")
+                            to_update.append({
+                                "record_id": existing_record.get("record_id"),
+                                "fields": create_fields
+                            })
+                            to_update_ids.append({
+                                "data_id": data_id,
+                                "link_field_values": link_field_values,
+                                "record_id": existing_record.get("record_id")
+                            })
                         else:
                             stats["unchanged"] += 1
                     else:
-                        # 新建记录（不含关联字段，但先尝试直接创建）
-                        create_fields = {k: v for k, v in filtered_fields.items() if k not in single_link_fields}
-                        
-                        # 如果有关联字段值，先创建记录再更新关联字段
-                        if link_field_values:
-                            # 先尝试不带关联字段创建
-                            new_record = self.client.create_record(
-                                self.config.app_token,
-                                self.table_id,
-                                create_fields
-                            )
-                            time.sleep(REQUEST_INTERVAL)  # 请求间隔
-                            stats["created"] += 1
-                            print(f"➕ 新建记录: {data_id}")
-                            
-                            # 然后更新关联字段
-                            for field_name, link_id in link_field_values.items():
-                                try:
-                                    self.client.update_record(
-                                        self.config.app_token,
-                                        self.table_id,
-                                        new_record.get("record_id"),
-                                        {field_name: link_id}
-                                    )
-                                    time.sleep(REQUEST_INTERVAL)  # 请求间隔
-                                    print(f"  🔗 关联 '{field_name}' -> {link_id}")
-                                except Exception as e:
-                                    print(f"  ⚠️  更新关联 '{field_name}' 失败: {e}")
-                        else:
-                            # 无关联字段，直接创建
-                            new_record = self.client.create_record(
-                                self.config.app_token,
-                                self.table_id,
-                                create_fields
-                            )
-                            time.sleep(REQUEST_INTERVAL)  # 请求间隔
-                            stats["created"] += 1
-                            print(f"➕ 新建无关联字段记录: {data_id}")
+                        # 新记录
+                        to_create.append({"fields": create_fields})
+                        to_create_ids.append({
+                            "data_id": data_id,
+                            "link_field_values": link_field_values
+                        })
                         
                 except Exception as e:
                     stats["errors"] += 1
                     print(f"❌ 处理第 {i+1} 行失败: {e}")
+            
+            # 批量新建记录
+            if to_create:
+                # 批量创建，每次最多500条
+                batch_size = 500
+                for i in range(0, len(to_create), batch_size):
+                    batch = to_create[i:i+batch_size]
+                    batch_info = to_create_ids[i:i+batch_size]
+                    
+                    try:
+                        result = self.client.create_records(
+                            self.config.app_token,
+                            self.table_id,
+                            batch
+                        )
+                        # 获取批量创建返回的 record_id 列表
+                        created_records = result.get("records", [])
+                        created_count = len(created_records)
+                        stats["created"] += created_count
+                        print(f"➕ 批量新建 {created_count} 条记录")
+                        
+                        # 批量更新关联字段（使用批量创建返回的 record_id）
+                        for j, info in enumerate(batch_info):
+                            if j < len(created_records) and info["link_field_values"]:
+                                record_id = created_records[j].get("record_id")
+                                for field_name, link_id in info["link_field_values"].items():
+                                    try:
+                                        self.client.update_record(
+                                            self.config.app_token,
+                                            self.table_id,
+                                            record_id,
+                                            {field_name: link_id}
+                                        )
+                                    except Exception as e:
+                                        print(f"  ⚠️  更新关联 '{field_name}' 失败: {e}")
+                                        
+                    except Exception as e:
+                        print(f"❌ 批量创建失败: {e}")
+                        # 回退到单条创建
+                        for j, (record, info) in enumerate(zip(batch, batch_info)):
+                            try:
+                                new_record = self.client.create_record(
+                                    self.config.app_token,
+                                    self.table_id,
+                                    record["fields"]
+                                )
+                                stats["created"] += 1
+                                print(f"➕ 新建记录: {info['data_id']}")
+                                
+                                # 更新关联字段
+                                for field_name, link_id in info["link_field_values"].items():
+                                    try:
+                                        self.client.update_record(
+                                            self.config.app_token,
+                                            self.table_id,
+                                            new_record.get("record_id"),
+                                            {field_name: link_id}
+                                        )
+                                    except Exception as e:
+                                        print(f"  ⚠️  更新关联 '{field_name}' 失败: {e}")
+                            except Exception as e:
+                                print(f"❌ 创建记录 {info['data_id']} 失败: {e}")
+            
+            # 批量更新记录
+            if to_update:
+                # 批量更新，每次最多500条
+                batch_size = 500
+                for i in range(0, len(to_update), batch_size):
+                    batch = to_update[i:i+batch_size]
+                    batch_info = to_update_ids[i:i+batch_size]
+                    
+                    try:
+                        self.client.update_records(
+                            self.config.app_token,
+                            self.table_id,
+                            batch
+                        )
+                        updated_count = len(batch)
+                        stats["updated"] += updated_count
+                        print(f"🔄 批量更新 {updated_count} 条记录")
+                        
+                        # 批量更新关联字段
+                        for info in batch_info:
+                            if info["link_field_values"]:
+                                for field_name, link_id in info["link_field_values"].items():
+                                    try:
+                                        self.client.update_record(
+                                            self.config.app_token,
+                                            self.table_id,
+                                            info["record_id"],
+                                            {field_name: link_id}
+                                        )
+                                    except Exception as e:
+                                        print(f"  ⚠️  更新关联 '{field_name}' 失败: {e}")
+                                        
+                    except Exception as e:
+                        print(f"❌ 批量更新失败: {e}")
+                        # 回退到单条更新
+                        for j, (record, info) in enumerate(zip(batch, batch_info)):
+                            try:
+                                self.client.update_record(
+                                    self.config.app_token,
+                                    self.table_id,
+                                    record["record_id"],
+                                    record["fields"]
+                                )
+                                stats["updated"] += 1
+                                print(f"🔄 更新记录: {info['data_id']}")
+                                
+                                # 更新关联字段
+                                for field_name, link_id in info["link_field_values"].items():
+                                    try:
+                                        self.client.update_record(
+                                            self.config.app_token,
+                                            self.table_id,
+                                            info["record_id"],
+                                            {field_name: link_id}
+                                        )
+                                    except Exception as e:
+                                        print(f"  ⚠️  更新关联 '{field_name}' 失败: {e}")
+                            except Exception as e:
+                                print(f"❌ 更新记录 {info['data_id']} 失败: {e}")
             
             # 输出统计
             print(f"\n📊 同步完成:")
